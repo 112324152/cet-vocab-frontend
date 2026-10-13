@@ -1,9 +1,27 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import ActionBar from './components/ActionBar.vue'
 import WordCard from './components/WordCard.vue'
 import { useWordSession } from './composables/useWordSession'
 
 const { currentWord, stats, mark } = useWordSession()
+
+// 后端连接状态：null = 检查中，true = 已连接，false = 未连接
+const backendOk = ref<boolean | null>(null)
+
+const backendText = computed(() => {
+  if (backendOk.value === null) return '正在检查后端…'
+  return backendOk.value ? '后端已连接' : '后端未连接'
+})
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/health')
+    backendOk.value = res.ok
+  } catch {
+    backendOk.value = false
+  }
+})
 </script>
 
 <template>
@@ -16,6 +34,13 @@ const { currentWord, stats, mark } = useWordSession()
         <span class="unknown">生词 {{ stats.unknown }}</span>
       </div>
     </header>
+
+    <p
+      class="backend"
+      :class="backendOk === true ? 'ok' : backendOk === false ? 'fail' : ''"
+    >
+      {{ backendText }}
+    </p>
 
     <main class="main">
       <WordCard v-if="currentWord" :word="currentWord" />
@@ -35,7 +60,7 @@ const { currentWord, stats, mark } = useWordSession()
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
 }
 
 h1 {
@@ -56,6 +81,20 @@ h1 {
 }
 
 .stats .unknown {
+  color: #991b1b;
+}
+
+.backend {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.backend.ok {
+  color: #166534;
+}
+
+.backend.fail {
   color: #991b1b;
 }
 </style>
