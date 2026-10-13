@@ -1,41 +1,45 @@
 import { computed, ref } from 'vue'
 import type { Word, WordState } from '../types/word'
-import { mockWords } from '../data/mockWords'
 
 // 每种状态的抽中权重：生词多推，熟词少推。
-// 这是演示版的简化算法，正式版（复习间隔、衍生词推荐）会做在后端。
 const WEIGHTS: Record<WordState, number> = {
   new: 2,
   unknown: 4,
   known: 1,
 }
 
-export function useWordSession(words: Word[] = mockWords) {
-  // 每个词当前的状态，初始都为 new
+export function useWordSession() {
   const states = ref<Record<number, WordState>>({})
-  for (const w of words) {
-    states.value[w.id] = 'new'
-  }
-
   const currentWord = ref<Word | null>(null)
   const lastId = ref<number | null>(null)
+
+  // 词库通过 init() 注入，不再直接依赖本地 mock 数据
+  let allWords: Word[] = []
 
   const stats = computed(() => {
     const all = Object.values(states.value)
     return {
-      total: words.length,
+      total: allWords.length,
       marked: all.filter((s) => s !== 'new').length,
       known: all.filter((s) => s === 'known').length,
       unknown: all.filter((s) => s === 'unknown').length,
     }
   })
 
-  function pickNext(): Word {
-    // 先排除上一张，避免连续抽到同一个词
-    const rest = words.filter((w) => w.id !== lastId.value)
-    const candidates = rest.length > 0 ? rest : words
+  function init(words: Word[]) {
+    allWords = words
+    const map: Record<number, WordState> = {}
+    for (const w of words) {
+      map[w.id] = 'new'
+    }
+    states.value = map
+    if (words.length > 0) next()
+  }
 
-    // 加权随机
+  function pickNext(): Word {
+    const rest = allWords.filter((w) => w.id !== lastId.value)
+    const candidates = rest.length > 0 ? rest : allWords
+
     const totalWeight = candidates.reduce(
       (sum, w) => sum + WEIGHTS[states.value[w.id]],
       0,
@@ -54,14 +58,11 @@ export function useWordSession(words: Word[] = mockWords) {
     lastId.value = word.id
   }
 
-  // 标记当前词，然后自动切换下一张
   function mark(state: 'known' | 'unknown') {
     if (!currentWord.value) return
     states.value[currentWord.value.id] = state
     next()
   }
 
-  next()
-
-  return { currentWord, stats, states, next, mark }
+  return { currentWord, stats, states, init, next, mark }
 }

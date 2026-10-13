@@ -3,11 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import ActionBar from './components/ActionBar.vue'
 import WordCard from './components/WordCard.vue'
 import { useWordSession } from './composables/useWordSession'
+import type { Word } from './types/word'
 
-const { currentWord, stats, mark } = useWordSession()
+const { currentWord, stats, init, mark } = useWordSession()
 
-// 后端连接状态：null = 检查中，true = 已连接，false = 未连接
 const backendOk = ref<boolean | null>(null)
+const loadError = ref('')
 
 const backendText = computed(() => {
   if (backendOk.value === null) return '正在检查后端…'
@@ -16,10 +17,19 @@ const backendText = computed(() => {
 
 onMounted(async () => {
   try {
-    const res = await fetch('/api/health')
-    backendOk.value = res.ok
+    const health = await fetch('/api/health')
+    backendOk.value = health.ok
   } catch {
     backendOk.value = false
+  }
+
+  try {
+    const res = await fetch('/api/words')
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const words = (await res.json()) as Word[]
+    init(words)
+  } catch (e) {
+    loadError.value = `词库加载失败：${(e as Error).message}`
   }
 })
 </script>
@@ -43,8 +53,12 @@ onMounted(async () => {
     </p>
 
     <main class="main">
-      <WordCard v-if="currentWord" :word="currentWord" />
-      <ActionBar @mark="mark" />
+      <p v-if="loadError" class="load-error">{{ loadError }}</p>
+      <template v-else>
+        <WordCard v-if="currentWord" :word="currentWord" />
+        <p v-else class="loading">正在加载词库…</p>
+        <ActionBar v-if="currentWord" @mark="mark" />
+      </template>
     </main>
   </div>
 </template>
@@ -95,6 +109,16 @@ h1 {
 }
 
 .backend.fail {
+  color: #991b1b;
+}
+
+.loading,
+.load-error {
+  text-align: center;
+  color: #6b7280;
+}
+
+.load-error {
   color: #991b1b;
 }
 </style>
