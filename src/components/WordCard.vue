@@ -3,8 +3,8 @@ import { ref, watch } from 'vue'
 import type { Word } from '../types/word'
 
 const props = defineProps<{ word: Word }>()
+const emit = defineEmits<{ ask: [] }>()
 
-// 每换一个词，重新隐藏释义
 const revealed = ref(false)
 watch(
   () => props.word.id,
@@ -31,6 +31,8 @@ watch(
     <button v-else class="reveal" @click="revealed = true">
       显示释义
     </button>
+
+    <button class="ask" @click="emit('ask')">问 AI</button>
   </div>
 </template>
 
@@ -98,5 +100,18 @@ watch(
 
 .reveal:hover {
   background: #f9fafb;
+}
+
+.ask {
+  margin-top: 4px;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 14px;
+  padding: 8px 12px;
+}
+
+.ask:hover {
+  text-decoration: underline;
 }
 </style>

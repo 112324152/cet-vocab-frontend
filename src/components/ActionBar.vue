@@ -1,4 +1,6 @@
 <script setup lang="ts">
+defineProps<{ disabled?: boolean }>()
+
 const emit = defineEmits<{
   mark: [state: 'known' | 'unknown']
 }>()
@@ -6,10 +8,18 @@ const emit = defineEmits<{
 
 <template>
   <div class="action-bar">
-    <button class="unknown" @click="emit('mark', 'unknown')">
+    <button
+      class="unknown"
+      :disabled="disabled"
+      @click="emit('mark', 'unknown')"
+    >
       不认识 · 生词
     </button>
-    <button class="known" @click="emit('mark', 'known')">
+    <button
+      class="known"
+      :disabled="disabled"
+      @click="emit('mark', 'known')"
+    >
       认识 · 熟词
     </button>
   </div>
@@ -32,8 +42,13 @@ const emit = defineEmits<{
   transition: opacity 0.15s;
 }
 
-.action-bar button:hover {
+.action-bar button:hover:not(:disabled) {
   opacity: 0.85;
+}
+
+.action-bar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .unknown {

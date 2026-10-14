@@ -1,19 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import ActionBar from './components/ActionBar.vue'
+import ChatPanel from './components/ChatPanel.vue'
 import WordCard from './components/WordCard.vue'
 import { useWordSession } from './composables/useWordSession'
 import type { Word } from './types/word'
 
-const { currentWord, stats, init, mark } = useWordSession()
+const { currentWord, stats, busy, init, mark } = useWordSession()
 
 const backendOk = ref<boolean | null>(null)
 const loadError = ref('')
+const chatOpen = ref(false)
+const chatWord = ref<Word | null>(null)
 
 const backendText = computed(() => {
   if (backendOk.value === null) return '正在检查后端…'
   return backendOk.value ? '后端已连接' : '后端未连接'
 })
+
+function openChat() {
+  if (!currentWord.value) return
+  chatWord.value = currentWord.value
+  chatOpen.value = true
+}
 
 onMounted(async () => {
   try {
@@ -24,10 +33,7 @@ onMounted(async () => {
   }
 
   try {
-    const res = await fetch('/api/words')
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const words = (await res.json()) as Word[]
-    init(words)
+    await init()
   } catch (e) {
     loadError.value = `词库加载失败：${(e as Error).message}`
   }
@@ -55,11 +61,17 @@ onMounted(async () => {
     <main class="main">
       <p v-if="loadError" class="load-error">{{ loadError }}</p>
       <template v-else>
-        <WordCard v-if="currentWord" :word="currentWord" />
-        <p v-else class="loading">正在加载词库…</p>
-        <ActionBar v-if="currentWord" @mark="mark" />
+        <WordCard v-if="currentWord" :word="currentWord" @ask="openChat" />
+        <p v-else class="loading">正在加载…</p>
+        <ActionBar :disabled="busy" @mark="mark" />
       </template>
     </main>
+
+    <ChatPanel
+      v-if="chatOpen && chatWord"
+      :word="chatWord"
+      @close="chatOpen = false"
+    />
   </div>
 </template>
 

@@ -1,68 +1,51 @@
-import { computed, ref } from 'vue'
-import type { Word, WordState } from '../types/word'
-
-// 每种状态的抽中权重：生词多推，熟词少推。
-const WEIGHTS: Record<WordState, number> = {
-  new: 2,
-  unknown: 4,
-  known: 1,
-}
+import { ref } from 'vue'
+import type { Stats, Word } from '../types/word'
 
 export function useWordSession() {
-  const states = ref<Record<number, WordState>>({})
   const currentWord = ref<Word | null>(null)
-  const lastId = ref<number | null>(null)
+  const stats = ref<Stats>({ total: 0, marked: 0, known: 0, unknown: 0 })
+  // 请求进行中，用于禁用按钮防连点
+  const busy = ref(false)
 
-  // 词库通过 init() 注入，不再直接依赖本地 mock 数据
-  let allWords: Word[] = []
-
-  const stats = computed(() => {
-    const all = Object.values(states.value)
-    return {
-      total: allWords.length,
-      marked: all.filter((s) => s !== 'new').length,
-      known: all.filter((s) => s === 'known').length,
-      unknown: all.filter((s) => s === 'unknown').length,
+  async function loadStats() {
+    const res = await fetch('/api/stats')
+    if (res.ok) {
+      stats.value = await res.json()
     }
-  })
+  }
 
-  function init(words: Word[]) {
-    allWords = words
-    const map: Record<number, WordState> = {}
-    for (const w of words) {
-      map[w.id] = 'new'
+  async function next() {
+    const excludeId = currentWord.value?.id
+    const url = excludeId
+      ? `/api/words/next?excludeId=${excludeId}`
+      : '/api/words/next'
+
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    currentWord.value = await res.json()
+  }
+
+  async function mark(state: 'known' | 'unknown') {
+    if (!currentWord.value || busy.value) return
+    busy.value = true
+    try {
+      const res = await fetch(`/api/words/${currentWord.value.id}/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      await Promise.all([next(), loadStats()])
+    } finally {
+      busy.value = false
     }
-    states.value = map
-    if (words.length > 0) next()
   }
 
-  function pickNext(): Word {
-    const rest = allWords.filter((w) => w.id !== lastId.value)
-    const candidates = rest.length > 0 ? rest : allWords
-
-    const totalWeight = candidates.reduce(
-      (sum, w) => sum + WEIGHTS[states.value[w.id]],
-      0,
-    )
-    let roll = Math.random() * totalWeight
-    for (const w of candidates) {
-      roll -= WEIGHTS[states.value[w.id]]
-      if (roll <= 0) return w
-    }
-    return candidates[candidates.length - 1]
+  async function init() {
+    await loadStats()
+    await next()
   }
 
-  function next() {
-    const word = pickNext()
-    currentWord.value = word
-    lastId.value = word.id
-  }
-
-  function mark(state: 'known' | 'unknown') {
-    if (!currentWord.value) return
-    states.value[currentWord.value.id] = state
-    next()
-  }
-
-  return { currentWord, stats, states, init, next, mark }
+  return { currentWord, stats, busy, init, next, mark }
 }
