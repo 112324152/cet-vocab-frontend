@@ -1,10 +1,15 @@
-import { ref } from 'vue'
+﻿import { ref } from 'vue'
 import type { Stats, Word } from '../types/word'
 
 export function useWordSession() {
   const currentWord = ref<Word | null>(null)
-  const stats = ref<Stats>({ total: 0, marked: 0, known: 0, unknown: 0 })
-  // 请求进行中，用于禁用按钮防连点
+  const stats = ref<Stats>({
+    total: 0,
+    newCount: 0,
+    dueNow: 0,
+    known: 0,
+    unknown: 0,
+  })
   const busy = ref(false)
 
   async function loadStats() {
