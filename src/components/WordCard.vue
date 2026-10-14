@@ -25,7 +25,7 @@ watch(
       <ul class="meanings">
         <li v-for="m in word.meanings" :key="m">{{ m }}</li>
       </ul>
-      <p class="example">{{ word.example }}</p>
+          <p v-if="word.example" class="example">{{ word.example }}</p>
     </div>
 
     <button v-else class="reveal" @click="revealed = true">

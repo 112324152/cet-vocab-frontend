@@ -45,7 +45,8 @@ onMounted(async () => {
     <header class="header">
       <h1>四六级背单词</h1>
       <div class="stats">
-        <span>已标记 {{ stats.marked }} / {{ stats.total }}</span>
+        <span class="due">待复习 {{ stats.dueNow }}</span>
+        <span>未学 {{ stats.newCount }}</span>
         <span class="known">熟词 {{ stats.known }}</span>
         <span class="unknown">生词 {{ stats.unknown }}</span>
       </div>
@@ -100,6 +101,10 @@ h1 {
   gap: 12px;
   font-size: 13px;
   color: #6b7280;
+}
+
+.stats .due {
+  color: #b45309;
 }
 
 .stats .known {

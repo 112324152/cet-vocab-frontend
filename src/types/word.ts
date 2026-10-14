@@ -4,12 +4,13 @@ export interface Word {
   phonetic: string
   meanings: string[]
   example: string
-  level: 'CET4' | 'CET6'
+  level: string
 }
 
 export interface Stats {
   total: number
-  marked: number
+  newCount: number
+  dueNow: number
   known: number
   unknown: number
 }
