@@ -143,7 +143,7 @@ function onEnter(e: KeyboardEvent) {
         <textarea
           v-model="input"
           rows="2"
-          placeholder="输入问题，Enter 发送，Shift+Enter 换行"
+          placeholder="输入问题，Enter 发送"
           @keydown.enter="onEnter"
         />
         <button :disabled="streaming || !input.trim()" @click="ask(input)">
@@ -196,6 +196,8 @@ function onEnter(e: KeyboardEvent) {
   line-height: 1;
   color: #6b7280;
   padding: 4px 8px;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .list {
@@ -205,6 +207,7 @@ function onEnter(e: KeyboardEvent) {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .empty {
@@ -255,6 +258,7 @@ function onEnter(e: KeyboardEvent) {
   border-radius: 999px;
   padding: 6px 12px;
   font-size: 13px;
+  min-height: 36px;
 }
 
 .quick button:disabled {
@@ -265,7 +269,7 @@ function onEnter(e: KeyboardEvent) {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
-  padding: 12px 16px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid #eee;
 }
 
@@ -275,7 +279,7 @@ function onEnter(e: KeyboardEvent) {
   border-radius: 10px;
   padding: 10px;
   font: inherit;
-  font-size: 14px;
+  font-size: 16px;
   box-sizing: border-box;
 }
 
@@ -285,11 +289,46 @@ function onEnter(e: KeyboardEvent) {
   background: #111827;
   color: #fff;
   padding: 0 18px;
-  font-size: 14px;
+  font-size: 15px;
+  min-height: 44px;
 }
 
 .composer button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ---------- 手机适配 ---------- */
+@media (max-width: 480px) {
+  .panel {
+    height: 88dvh;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .panel-header {
+    padding: 12px 14px;
+  }
+
+  .list {
+    padding: 12px;
+  }
+
+  .msg {
+    max-width: 90%;
+    font-size: 15px;
+  }
+
+  .quick {
+    padding: 0 12px 10px;
+  }
+
+  .composer {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+
+  .composer button {
+    padding: 0 14px;
+  }
 }
 </style>

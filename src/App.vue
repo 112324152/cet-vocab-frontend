@@ -87,6 +87,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
@@ -94,11 +95,14 @@ h1 {
   font-size: 20px;
   margin: 0;
   color: #111827;
+  white-space: nowrap;
 }
 
 .stats {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 10px;
   font-size: 13px;
   color: #6b7280;
 }
@@ -137,5 +141,34 @@ h1 {
 
 .load-error {
   color: #991b1b;
+}
+
+/* ---------- 手机适配 ---------- */
+@media (max-width: 480px) {
+  .app {
+    padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-size: 17px;
+  }
+
+  .stats {
+    font-size: 12px;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .backend {
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
 }
 </style>

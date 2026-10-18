@@ -3,6 +3,8 @@
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   color: #1f2328;
   background-color: #f6f7f9;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 * {
@@ -16,7 +18,19 @@ body,
   margin: 0;
 }
 
+body {
+  overscroll-behavior-y: none;
+}
+
 button {
   font-family: inherit;
   cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* 手机上不允许双击缩放，避免误触 */
+@media (max-width: 768px) {
+  body {
+    touch-action: pan-y;
+  }
 }
