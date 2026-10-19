@@ -1,49 +1,33 @@
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 
 export function useSpeech() {
-  const supported =
-    typeof window !== 'undefined' && 'speechSynthesis' in window
+  const speaking = ref(false)
+  let currentAudio: HTMLAudioElement | null = null
 
-  const voices = ref<SpeechSynthesisVoice[]>([])
+  function stop() {
+    if (currentAudio) {
+      currentAudio.pause()
+      currentAudio.currentTime = 0
+      currentAudio = null
+    }
+    speaking.value = false
+  }
 
-  function loadVoices() {
-    if (!supported) return
-    const list = window.speechSynthesis.getVoices()
-    if (list.length > 0) {
-      voices.value = list
+  async function speak(wordId: number) {
+    stop()
+    const audio = new Audio(`/api/words/${wordId}/audio`)
+    currentAudio = audio
+    speaking.value = true
+
+    audio.addEventListener('ended', () => { speaking.value = false })
+    audio.addEventListener('error', () => { speaking.value = false })
+
+    try {
+      await audio.play()
+    } catch {
+      speaking.value = false
     }
   }
 
-  function pickEnglishVoice(): SpeechSynthesisVoice | null {
-    if (voices.value.length === 0) return null
-    const english = voices.value.filter((v) =>
-      v.lang.toLowerCase().startsWith('en'),
-    )
-    if (english.length === 0) return null
-    return (
-      english.find((v) => v.lang === 'en-US') ||
-      english.find((v) => v.lang === 'en-GB') ||
-      english[0]
-    )
-  }
-
-  function speak(text: string, rate = 0.9) {
-    if (!supported || !text) return
-    window.speechSynthesis.cancel()
-    const utter = new SpeechSynthesisUtterance(text)
-    utter.lang = 'en-US'
-    utter.rate = rate
-    utter.pitch = 1
-    const voice = pickEnglishVoice()
-    if (voice) utter.voice = voice
-    window.speechSynthesis.speak(utter)
-  }
-
-  onMounted(() => {
-    if (!supported) return
-    loadVoices()
-    window.speechSynthesis.addEventListener('voiceschanged', loadVoices)
-  })
-
-  return { supported, speak }
+  return { speak, stop, speaking }
 }

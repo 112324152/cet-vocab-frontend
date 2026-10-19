@@ -7,17 +7,18 @@ const props = defineProps<{ word: Word }>()
 const emit = defineEmits<{ ask: [] }>()
 
 const revealed = ref(false)
+const { speak, stop, speaking } = useSpeech()
+
 watch(
   () => props.word.id,
   () => {
     revealed.value = false
+    stop()
   },
 )
 
-const { supported, speak } = useSpeech()
-
 function pronounce() {
-  speak(props.word.text)
+  speak(props.word.id)
 }
 </script>
 
@@ -28,8 +29,8 @@ function pronounce() {
     <div class="word-row">
       <span class="word">{{ word.text }}</span>
       <button
-        v-if="supported"
         class="speak"
+        :class="{ playing: speaking }"
         type="button"
         aria-label="播放发音"
         @click="pronounce"
@@ -118,7 +119,7 @@ function pronounce() {
   border-radius: 50%;
   background: transparent;
   color: #2563eb;
-  transition: background-color 0.15s;
+  transition: background-color 0.15s, opacity 0.15s;
 }
 
 .speak:hover {
@@ -127,6 +128,16 @@ function pronounce() {
 
 .speak:active {
   background: #dbeafe;
+}
+
+.speak.playing {
+  background: #dbeafe;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
 .phonetic {
