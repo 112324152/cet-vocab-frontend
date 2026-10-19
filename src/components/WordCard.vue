@@ -21,13 +21,13 @@ watch(
   },
 )
 
-function pronounce(text: string) {
-  speak(props.word.id) // 目前发音接口按 word.id 取原词，派生词暂不支持独立发音
-  void text
+function pronounce() {
+  speak(props.word.id)
 }
 
-function speakMember() {
-  // 临时占位，后续可扩展为按 member 发音
+function cleanMeaning(raw: string): string {
+  // ECDICT 用字面量 \n 分隔多个义项，需要转成真换行
+  return raw.replace(/\\n/g, '\n')
 }
 </script>
 
@@ -42,11 +42,18 @@ function speakMember() {
         :class="{ playing: speaking }"
         type="button"
         aria-label="播放发音"
-        @click="pronounce(word.text)"
+        @click="pronounce"
       >
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
-          stroke="currentColor" stroke-width="2" stroke-linecap="round"
-          stroke-linejoin="round">
+        <svg
+          viewBox="0 0 24 24"
+          width="22"
+          height="22"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M11 5L6 9H2v6h4l5 4V5z" />
           <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
           <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
@@ -67,7 +74,7 @@ function speakMember() {
       显示释义
     </button>
 
-    <div v-if="family" class="family">
+    <div v-if="family && family.members.length > 0" class="family">
       <button class="family-toggle" @click="familyExpanded = !familyExpanded">
         <span>词族 · {{ family.members.length }} 个变形</span>
         <span class="caret" :class="{ open: familyExpanded }">▾</span>
@@ -79,7 +86,9 @@ function speakMember() {
             <span class="member-rel">{{ relationLabel(m.relation) }}</span>
           </div>
           <div v-if="m.phonetic" class="member-phonetic">/{{ m.phonetic }}/</div>
-          <div v-if="m.meaning" class="member-meaning">{{ m.meaning }}</div>
+          <div v-if="m.meaning" class="member-meaning">
+            {{ cleanMeaning(m.meaning) }}
+          </div>
         </li>
       </ul>
     </div>
@@ -141,7 +150,10 @@ function speakMember() {
   transition: background-color 0.15s;
 }
 
-.speak:hover { background: #eff6ff; }
+.speak:hover {
+  background: #eff6ff;
+}
+
 .speak.playing {
   background: #dbeafe;
   animation: pulse 1s ease-in-out infinite;
@@ -188,7 +200,9 @@ function speakMember() {
   font-size: 15px;
 }
 
-.reveal:hover { background: #f9fafb; }
+.reveal:hover {
+  background: #f9fafb;
+}
 
 .family {
   width: 100%;
@@ -231,7 +245,9 @@ function speakMember() {
   border-bottom: 1px dashed #f3f4f6;
 }
 
-.family-list li:last-child { border-bottom: none; }
+.family-list li:last-child {
+  border-bottom: none;
+}
 
 .member-main {
   display: flex;
@@ -265,6 +281,7 @@ function speakMember() {
   color: #374151;
   margin-top: 2px;
   line-height: 1.5;
+  white-space: pre-line;
 }
 
 .ask {
@@ -277,7 +294,9 @@ function speakMember() {
   padding: 8px 12px;
 }
 
-.ask:hover { text-decoration: underline; }
+.ask:hover {
+  text-decoration: underline;
+}
 
 @media (max-width: 480px) {
   .word-card {
@@ -285,9 +304,22 @@ function speakMember() {
     min-height: 240px;
     gap: 8px;
   }
-  .word { font-size: 34px; }
-  .phonetic { font-size: 14px; }
-  .meanings { line-height: 1.7; font-size: 15px; }
-  .example { font-size: 13px; }
+
+  .word {
+    font-size: 34px;
+  }
+
+  .phonetic {
+    font-size: 14px;
+  }
+
+  .meanings {
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  .example {
+    font-size: 13px;
+  }
 }
 </style>
