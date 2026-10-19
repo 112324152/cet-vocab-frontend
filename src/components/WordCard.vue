@@ -2,23 +2,32 @@
 import { ref, watch } from 'vue'
 import type { Word } from '../types/word'
 import { useSpeech } from '../composables/useSpeech'
+import { relationLabel, useWordFamily } from '../composables/useWordFamily'
 
 const props = defineProps<{ word: Word }>()
 const emit = defineEmits<{ ask: [] }>()
 
 const revealed = ref(false)
+const familyExpanded = ref(false)
 const { speak, stop, speaking } = useSpeech()
+const { family } = useWordFamily(() => props.word.id)
 
 watch(
   () => props.word.id,
   () => {
     revealed.value = false
+    familyExpanded.value = false
     stop()
   },
 )
 
-function pronounce() {
-  speak(props.word.id)
+function pronounce(text: string) {
+  speak(props.word.id) // 目前发音接口按 word.id 取原词，派生词暂不支持独立发音
+  void text
+}
+
+function speakMember() {
+  // 临时占位，后续可扩展为按 member 发音
 }
 </script>
 
@@ -33,18 +42,11 @@ function pronounce() {
         :class="{ playing: speaking }"
         type="button"
         aria-label="播放发音"
-        @click="pronounce"
+        @click="pronounce(word.text)"
       >
-        <svg
-          viewBox="0 0 24 24"
-          width="22"
-          height="22"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round">
           <path d="M11 5L6 9H2v6h4l5 4V5z" />
           <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
           <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
@@ -64,6 +66,23 @@ function pronounce() {
     <button v-else class="reveal" @click="revealed = true">
       显示释义
     </button>
+
+    <div v-if="family" class="family">
+      <button class="family-toggle" @click="familyExpanded = !familyExpanded">
+        <span>词族 · {{ family.members.length }} 个变形</span>
+        <span class="caret" :class="{ open: familyExpanded }">▾</span>
+      </button>
+      <ul v-if="familyExpanded" class="family-list">
+        <li v-for="m in family.members" :key="m.text + m.relation">
+          <div class="member-main">
+            <span class="member-text">{{ m.text }}</span>
+            <span class="member-rel">{{ relationLabel(m.relation) }}</span>
+          </div>
+          <div v-if="m.phonetic" class="member-phonetic">/{{ m.phonetic }}/</div>
+          <div v-if="m.meaning" class="member-meaning">{{ m.meaning }}</div>
+        </li>
+      </ul>
+    </div>
 
     <button class="ask" @click="emit('ask')">问 AI</button>
   </div>
@@ -119,17 +138,10 @@ function pronounce() {
   border-radius: 50%;
   background: transparent;
   color: #2563eb;
-  transition: background-color 0.15s, opacity 0.15s;
+  transition: background-color 0.15s;
 }
 
-.speak:hover {
-  background: #eff6ff;
-}
-
-.speak:active {
-  background: #dbeafe;
-}
-
+.speak:hover { background: #eff6ff; }
 .speak.playing {
   background: #dbeafe;
   animation: pulse 1s ease-in-out infinite;
@@ -176,8 +188,83 @@ function pronounce() {
   font-size: 15px;
 }
 
-.reveal:hover {
-  background: #f9fafb;
+.reveal:hover { background: #f9fafb; }
+
+.family {
+  width: 100%;
+  margin-top: 4px;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 8px;
+}
+
+.family-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+  padding: 8px 4px;
+  color: #2563eb;
+  font-size: 14px;
+  text-align: left;
+}
+
+.caret {
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.caret.open {
+  transform: rotate(180deg);
+}
+
+.family-list {
+  list-style: none;
+  padding: 0 4px;
+  margin: 4px 0 0;
+  text-align: left;
+}
+
+.family-list li {
+  padding: 8px 0;
+  border-bottom: 1px dashed #f3f4f6;
+}
+
+.family-list li:last-child { border-bottom: none; }
+
+.member-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.member-text {
+  font-weight: 600;
+  color: #111827;
+  font-size: 15px;
+}
+
+.member-rel {
+  font-size: 11px;
+  color: #6b7280;
+  background: #f3f4f6;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.member-phonetic {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.member-meaning {
+  font-size: 13px;
+  color: #374151;
+  margin-top: 2px;
+  line-height: 1.5;
 }
 
 .ask {
@@ -190,33 +277,17 @@ function pronounce() {
   padding: 8px 12px;
 }
 
-.ask:hover {
-  text-decoration: underline;
-}
+.ask:hover { text-decoration: underline; }
 
-/* ---------- 手机适配 ---------- */
 @media (max-width: 480px) {
   .word-card {
     padding: 28px 18px;
     min-height: 240px;
     gap: 8px;
   }
-
-  .word {
-    font-size: 34px;
-  }
-
-  .phonetic {
-    font-size: 14px;
-  }
-
-  .meanings {
-    line-height: 1.7;
-    font-size: 15px;
-  }
-
-  .example {
-    font-size: 13px;
-  }
+  .word { font-size: 34px; }
+  .phonetic { font-size: 14px; }
+  .meanings { line-height: 1.7; font-size: 15px; }
+  .example { font-size: 13px; }
 }
 </style>

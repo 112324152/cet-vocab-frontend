@@ -14,3 +14,15 @@ export interface Stats {
   known: number
   unknown: number
 }
+export interface FamilyMember {
+  text: string
+  relation: string
+  phonetic: string
+  meaning: string
+}
+
+export interface WordFamily {
+  lemmaId: number
+  lemma: string
+  members: FamilyMember[]
+}
