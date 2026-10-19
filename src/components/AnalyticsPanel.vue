@@ -63,16 +63,20 @@ async function load() {
     if (!oRes.ok) throw new Error(`HTTP ${oRes.status}`)
 
     overview.value = await oRes.json()
-    daily.value = await dRes.json()
-    hardest.value = await hRes.json()
-    intervals.value = await iRes.json()
-
-    await nextTick()
-    renderCharts()
+    daily.value = dRes.ok ? await dRes.json() : []
+    hardest.value = hRes.ok ? await hRes.json() : []
+    intervals.value = iRes.ok ? await iRes.json() : []
   } catch (e) {
     error.value = `加载失败：${(e as Error).message}`
   } finally {
     loading.value = false
+  }
+
+  // 关键：loading 置 false 之后 DOM 才会渲染 canvas，
+  // 此刻再 nextTick 才能拿到真实引用
+  await nextTick()
+  if (!error.value) {
+    renderCharts()
   }
 }
 
