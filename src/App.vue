@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import ActionBar from './components/ActionBar.vue'
+import AnalyticsPanel from './components/AnalyticsPanel.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import WordCard from './components/WordCard.vue'
 import { useWordSession } from './composables/useWordSession'
@@ -12,6 +13,7 @@ const backendOk = ref<boolean | null>(null)
 const loadError = ref('')
 const chatOpen = ref(false)
 const chatWord = ref<Word | null>(null)
+const analyticsOpen = ref(false)
 
 const backendText = computed(() => {
   if (backendOk.value === null) return '正在检查后端…'
@@ -43,7 +45,12 @@ onMounted(async () => {
 <template>
   <div class="app">
     <header class="header">
-      <h1>四六级背单词</h1>
+      <div class="title-row">
+        <h1>四六级背单词</h1>
+        <button class="analytics-btn" @click="analyticsOpen = true">
+          学习数据
+        </button>
+      </div>
       <div class="stats">
         <span class="due">待复习 {{ stats.dueNow }}</span>
         <span>未学 {{ stats.newCount }}</span>
@@ -73,6 +80,8 @@ onMounted(async () => {
       :word="chatWord"
       @close="chatOpen = false"
     />
+
+    <AnalyticsPanel v-if="analyticsOpen" @close="analyticsOpen = false" />
   </div>
 </template>
 
@@ -85,10 +94,16 @@ onMounted(async () => {
 
 .header {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.title-row {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
 }
 
 h1 {
@@ -98,10 +113,24 @@ h1 {
   white-space: nowrap;
 }
 
+.analytics-btn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.analytics-btn:hover {
+  background: #f9fafb;
+}
+
 .stats {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 6px 10px;
   font-size: 13px;
   color: #6b7280;
@@ -143,17 +172,9 @@ h1 {
   color: #991b1b;
 }
 
-/* ---------- 手机适配 ---------- */
 @media (max-width: 480px) {
   .app {
     padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
-  }
-
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    margin-bottom: 6px;
   }
 
   h1 {
@@ -162,8 +183,6 @@ h1 {
 
   .stats {
     font-size: 12px;
-    justify-content: flex-start;
-    width: 100%;
   }
 
   .backend {
