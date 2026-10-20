@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import ActionBar from './components/ActionBar.vue'
 import AnalyticsPanel from './components/AnalyticsPanel.vue'
 import ChatPanel from './components/ChatPanel.vue'
+import TextReader from './components/TextReader.vue'
 import WordCard from './components/WordCard.vue'
 import { useWordSession } from './composables/useWordSession'
 import type { Word } from './types/word'
@@ -14,6 +15,7 @@ const loadError = ref('')
 const chatOpen = ref(false)
 const chatWord = ref<Word | null>(null)
 const analyticsOpen = ref(false)
+const readerOpen = ref(false)
 
 const backendText = computed(() => {
   if (backendOk.value === null) return '正在检查后端…'
@@ -47,9 +49,10 @@ onMounted(async () => {
     <header class="header">
       <div class="title-row">
         <h1>四六级背单词</h1>
-        <button class="analytics-btn" @click="analyticsOpen = true">
-          学习数据
-        </button>
+        <div class="actions">
+          <button class="top-btn" @click="readerOpen = true">阅读收集</button>
+          <button class="top-btn" @click="analyticsOpen = true">学习数据</button>
+        </div>
       </div>
       <div class="stats">
         <span class="due">待复习 {{ stats.dueNow }}</span>
@@ -82,6 +85,8 @@ onMounted(async () => {
     />
 
     <AnalyticsPanel v-if="analyticsOpen" @close="analyticsOpen = false" />
+
+    <TextReader v-if="readerOpen" @close="readerOpen = false" />
   </div>
 </template>
 
@@ -104,6 +109,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 h1 {
@@ -113,18 +119,23 @@ h1 {
   white-space: nowrap;
 }
 
-.analytics-btn {
+.actions {
+  display: flex;
+  gap: 6px;
+}
+
+.top-btn {
   border: 1px solid #d1d5db;
   background: #fff;
   color: #374151;
   border-radius: 999px;
-  padding: 6px 14px;
+  padding: 6px 12px;
   font-size: 13px;
   min-height: 36px;
   white-space: nowrap;
 }
 
-.analytics-btn:hover {
+.top-btn:hover {
   background: #f9fafb;
 }
 
@@ -136,17 +147,9 @@ h1 {
   color: #6b7280;
 }
 
-.stats .due {
-  color: #b45309;
-}
-
-.stats .known {
-  color: #166534;
-}
-
-.stats .unknown {
-  color: #991b1b;
-}
+.stats .due { color: #b45309; }
+.stats .known { color: #166534; }
+.stats .unknown { color: #991b1b; }
 
 .backend {
   margin: 0 0 16px;
@@ -154,13 +157,8 @@ h1 {
   color: #6b7280;
 }
 
-.backend.ok {
-  color: #166534;
-}
-
-.backend.fail {
-  color: #991b1b;
-}
+.backend.ok { color: #166534; }
+.backend.fail { color: #991b1b; }
 
 .loading,
 .load-error {
@@ -168,22 +166,22 @@ h1 {
   color: #6b7280;
 }
 
-.load-error {
-  color: #991b1b;
-}
+.load-error { color: #991b1b; }
 
 @media (max-width: 480px) {
   .app {
     padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
   }
 
-  h1 {
-    font-size: 17px;
+  h1 { font-size: 17px; }
+
+  .top-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+    min-height: 32px;
   }
 
-  .stats {
-    font-size: 12px;
-  }
+  .stats { font-size: 12px; }
 
   .backend {
     margin-bottom: 12px;
