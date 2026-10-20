@@ -7,13 +7,12 @@ const emit = defineEmits<{ close: [] }>()
 const loading = ref(true)
 const error = ref('')
 const words = ref<CollectedWord[]>([])
+const deletingId = ref<number | null>(null)
 
 function formatDate(iso: string): string {
   try {
     const d = new Date(iso)
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${m}-${day}`
+    return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   } catch {
     return ''
   }
@@ -38,6 +37,20 @@ async function load() {
   }
 }
 
+async function remove(id: number) {
+  if (!confirm('确定要删除这个词吗？')) return
+  deletingId.value = id
+  try {
+    const res = await fetch(`/api/collected/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    words.value = words.value.filter((w) => w.id !== id)
+  } catch (e) {
+    alert(`删除失败：${(e as Error).message}`)
+  } finally {
+    deletingId.value = null
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -48,20 +61,27 @@ onMounted(load)
         <div class="title">收集本 · {{ words.length }}</div>
         <button class="close" @click="emit('close')">×</button>
       </header>
-
       <div class="body">
         <p v-if="loading" class="hint">正在加载…</p>
         <p v-else-if="error" class="hint error">{{ error }}</p>
         <p v-else-if="words.length === 0" class="hint">
-          还没有收藏。去"阅读收集"里粘贴一段英文，点蓝色生词就能收藏。
+          还没有收藏。去“阅读收集”里粘贴一段英文，点生词就能收藏。
         </p>
-
         <ul v-else class="list">
           <li v-for="w in words" :key="w.id">
             <div class="row-main">
-              <span class="word">{{ w.word }}</span>
-              <span v-if="w.phonetic" class="phonetic">/{{ w.phonetic }}/</span>
-              <span class="date">{{ formatDate(w.collectedAt) }}</span>
+              <div class="word-info">
+                <span class="word">{{ w.word }}</span>
+                <span v-if="w.phonetic" class="phonetic">/{{ w.phonetic }}/</span>
+                <span class="date">{{ formatDate(w.collectedAt) }}</span>
+              </div>
+              <button
+                class="delete-btn"
+                :disabled="deletingId === w.id"
+                @click="remove(w.id)"
+              >
+                {{ deletingId === w.id ? '…' : '删除' }}
+              </button>
             </div>
             <div v-if="w.translation" class="translation">
               {{ cleanMeaning(w.translation) }}
@@ -158,8 +178,17 @@ onMounted(load)
 .row-main {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.word-info {
+  display: flex;
+  align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .word {
@@ -176,7 +205,25 @@ onMounted(load)
 .date {
   font-size: 12px;
   color: #d1d5db;
-  margin-left: auto;
+}
+
+.delete-btn {
+  border: 1px solid #fecaca;
+  background: #fff;
+  color: #dc2626;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  min-height: 28px;
+  white-space: nowrap;
+}
+
+.delete-btn:hover {
+  background: #fef2f2;
+}
+
+.delete-btn:disabled {
+  opacity: 0.5;
 }
 
 .translation {

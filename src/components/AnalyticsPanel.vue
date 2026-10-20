@@ -36,6 +36,7 @@ const overview = ref<Overview | null>(null)
 const daily = ref<DailyStat[]>([])
 const hardest = ref<HardestWord[]>([])
 const intervals = ref<IntervalBucket[]>([])
+const masteringId = ref<number | null>(null)
 
 const dailyCanvas = ref<HTMLCanvasElement | null>(null)
 const intervalCanvas = ref<HTMLCanvasElement | null>(null)
@@ -47,6 +48,7 @@ const hasData = computed(() => (overview.value?.totalReviews ?? 0) > 0)
 function minutesToHuman(m: number): string {
   if (m < 60) return `${m} 分钟`
   if (m < 1440) return `${Math.round(m / 60)} 小时`
+  if (m >= 525600) return '已掌握'
   return `${Math.round(m / 1440)} 天`
 }
 
@@ -72,11 +74,25 @@ async function load() {
     loading.value = false
   }
 
-  // 关键：loading 置 false 之后 DOM 才会渲染 canvas，
-  // 此刻再 nextTick 才能拿到真实引用
   await nextTick()
   if (!error.value) {
     renderCharts()
+  }
+}
+
+async function markMastered(wordId: number) {
+  if (!confirm('确认已掌握这个词？它会从易忘词榜移除，一年内不再出现。')) return
+  masteringId.value = wordId
+  try {
+    const res = await fetch(`/api/analytics/mastered/${wordId}`, { method: 'POST' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    hardest.value = hardest.value.filter((w) => w.wordId !== wordId)
+    const oRes = await fetch('/api/analytics/overview')
+    if (oRes.ok) overview.value = await oRes.json()
+  } catch (e) {
+    alert(`操作失败：${(e as Error).message}`)
+  } finally {
+    masteringId.value = null
   }
 }
 
@@ -214,16 +230,27 @@ onUnmounted(cleanup)
 
             <section class="block">
               <h3>易忘词排行</h3>
-              <p class="sub">忘记次数越多，越需要重点复习</p>
+              <p class="sub">点“已掌握”把词移出榜单，一年内不再出现</p>
               <ul class="hardest">
                 <li v-for="w in hardest" :key="w.wordId">
-                  <div class="hw-main">
-                    <span class="hw-text">{{ w.text }}</span>
-                    <span class="hw-phonetic">{{ w.phonetic }}</span>
-                  </div>
-                  <div class="hw-meaning">{{ w.firstMeaning }}</div>
-                  <div class="hw-meta">
-                    忘记 {{ w.lapses }} 次 · 间隔 {{ minutesToHuman(w.intervalMinutes) }}
+                  <div class="hw-row">
+                    <div class="hw-info">
+                      <div class="hw-main">
+                        <span class="hw-text">{{ w.text }}</span>
+                        <span class="hw-phonetic">{{ w.phonetic }}</span>
+                      </div>
+                      <div class="hw-meaning">{{ w.firstMeaning }}</div>
+                      <div class="hw-meta">
+                        忘记 {{ w.lapses }} 次 · 间隔 {{ minutesToHuman(w.intervalMinutes) }}
+                      </div>
+                    </div>
+                    <button
+                      class="master-btn"
+                      :disabled="masteringId === w.wordId"
+                      @click="markMastered(w.wordId)"
+                    >
+                      {{ masteringId === w.wordId ? '…' : '已掌握' }}
+                    </button>
                   </div>
                 </li>
                 <li v-if="hardest.length === 0" class="empty">
@@ -375,10 +402,22 @@ h3 {
   font-size: 14px;
 }
 
+.hw-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.hw-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .hw-main {
   display: flex;
   align-items: baseline;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .hw-text {
@@ -402,6 +441,26 @@ h3 {
   font-size: 12px;
   color: #9ca3af;
   margin-top: 2px;
+}
+
+.master-btn {
+  flex-shrink: 0;
+  border: 1px solid #bbf7d0;
+  background: #fff;
+  color: #16a34a;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  min-height: 28px;
+  white-space: nowrap;
+}
+
+.master-btn:hover {
+  background: #f0fdf4;
+}
+
+.master-btn:disabled {
+  opacity: 0.5;
 }
 
 @media (max-width: 480px) {

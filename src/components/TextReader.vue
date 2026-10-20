@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import type { LookupResult } from '../types/dict'
 
 const emit = defineEmits<{ close: [] }>()
@@ -29,15 +29,8 @@ const selected = ref<{
   phonetic: string
   translation: string
   inDict: boolean
+  collected: boolean
 } | null>(null)
-
-const collecting = ref(false)
-const collectMessage = ref('')
-
-const alreadyCollected = computed(() => {
-  if (!selected.value) return false
-  return collectedSet.value.has(selected.value.word)
-})
 
 function tokenize(text: string): Token[] {
   const result: Token[] = []
@@ -108,7 +101,7 @@ async function analyze() {
         collectedSet.value = new Set(list.map((x) => x.word))
       }
     } catch {
-      // 静默
+      // 收藏列表加载失败不影响分析
     }
 
     for (const t of baseTokens) {
@@ -133,49 +126,40 @@ function openWord(t: Token) {
   selected.value = {
     word: t.lower,
     phonetic: info?.phonetic || '',
-    translation: info?.translation || '词典中未收录，可加入收集本',
+    translation: info?.translation || '词典中未收录',
     inDict: !!info,
+    collected: collectedSet.value.has(t.lower),
   }
-  collecting.value = false
-  collectMessage.value = ''
 }
 
 async function collect() {
   const w = selected.value
-  if (!w || collecting.value) return
-  collecting.value = true
-  collectMessage.value = ''
+  if (!w || w.collected) return
   try {
     const res = await fetch('/api/collect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ word: w.word, context: '' }),
     })
-    if (!res.ok) {
-      collectMessage.value = `收藏失败 (HTTP ${res.status})`
-      return
+    if (res.ok) {
+      collectedSet.value.add(w.word)
+      for (const t of tokens.value) {
+        if (t.isWord && t.lower === w.word) t.status = 'collected'
+      }
+      selected.value = { ...w, collected: true }
     }
-    collectedSet.value.add(w.word)
-    for (const t of tokens.value) {
-      if (t.isWord && t.lower === w.word) t.status = 'collected'
-    }
-    collectMessage.value = '已收藏'
-  } catch (e) {
-    collectMessage.value = `网络错误：${(e as Error).message}`
-  } finally {
-    collecting.value = false
+  } catch {
+    // 收藏失败静默
   }
 }
 
 function closePopup() {
   selected.value = null
-  collectMessage.value = ''
 }
 
 function backToEdit() {
   mode.value = 'edit'
   selected.value = null
-  collectMessage.value = ''
 }
 </script>
 
@@ -183,10 +167,7 @@ function backToEdit() {
   <div class="overlay" @click.self="emit('close')">
     <div class="panel">
       <header class="panel-header">
-        <div class="title">
-          阅读收集
-          <span class="version">v2</span>
-        </div>
+        <div class="title">阅读收集 v2</div>
         <button class="close" @click="emit('close')">×</button>
       </header>
 
@@ -241,19 +222,17 @@ function backToEdit() {
               <span v-if="selected.phonetic" class="popup-phonetic">
                 /{{ selected.phonetic }}/
               </span>
-              <span v-if="alreadyCollected" class="collected-badge">已收藏</span>
             </div>
             <button class="popup-close" @click="closePopup">×</button>
           </div>
           <p class="popup-translation">{{ selected.translation }}</p>
-          <p v-if="collectMessage" class="popup-msg">{{ collectMessage }}</p>
           <div class="popup-actions">
             <button
               class="primary small"
-              :disabled="collecting"
+              :disabled="false"
               @click="collect"
             >
-              {{ collecting ? '收藏中…' : alreadyCollected ? '再收藏一次' : '收藏' }}
+              {{ selected.collected ? '已收藏' : '收藏' }}
             </button>
           </div>
         </div>
@@ -295,18 +274,6 @@ function backToEdit() {
   font-weight: 600;
   color: #111827;
   font-size: 16px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.version {
-  font-size: 10px;
-  font-weight: 500;
-  color: #9ca3af;
-  background: #f3f4f6;
-  border-radius: 4px;
-  padding: 1px 6px;
 }
 
 .close {
@@ -490,14 +457,6 @@ function backToEdit() {
   color: #9ca3af;
 }
 
-.collected-badge {
-  font-size: 11px;
-  color: #166534;
-  background: #dcfce7;
-  border-radius: 4px;
-  padding: 1px 6px;
-}
-
 .popup-close {
   border: 0;
   background: transparent;
@@ -515,12 +474,6 @@ function backToEdit() {
   font-size: 15px;
   white-space: pre-line;
   line-height: 1.6;
-}
-
-.popup-msg {
-  margin: -6px 0 10px;
-  color: #6b7280;
-  font-size: 13px;
 }
 
 .popup-actions {
