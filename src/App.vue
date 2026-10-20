@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import ActionBar from './components/ActionBar.vue'
 import AnalyticsPanel from './components/AnalyticsPanel.vue'
 import ChatPanel from './components/ChatPanel.vue'
+import CollectedWords from './components/CollectedWords.vue'
 import TextReader from './components/TextReader.vue'
 import WordCard from './components/WordCard.vue'
 import { useWordSession } from './composables/useWordSession'
@@ -16,6 +17,7 @@ const chatOpen = ref(false)
 const chatWord = ref<Word | null>(null)
 const analyticsOpen = ref(false)
 const readerOpen = ref(false)
+const collectedOpen = ref(false)
 
 const backendText = computed(() => {
   if (backendOk.value === null) return '正在检查后端…'
@@ -51,6 +53,7 @@ onMounted(async () => {
         <h1>四六级背单词</h1>
         <div class="actions">
           <button class="top-btn" @click="readerOpen = true">阅读收集</button>
+          <button class="top-btn" @click="collectedOpen = true">收集本</button>
           <button class="top-btn" @click="analyticsOpen = true">学习数据</button>
         </div>
       </div>
@@ -87,6 +90,8 @@ onMounted(async () => {
     <AnalyticsPanel v-if="analyticsOpen" @close="analyticsOpen = false" />
 
     <TextReader v-if="readerOpen" @close="readerOpen = false" />
+
+    <CollectedWords v-if="collectedOpen" @close="collectedOpen = false" />
   </div>
 </template>
 
@@ -174,6 +179,15 @@ h1 {
   }
 
   h1 { font-size: 17px; }
+
+  .title-row {
+    align-items: flex-start;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
 
   .top-btn {
     padding: 5px 10px;

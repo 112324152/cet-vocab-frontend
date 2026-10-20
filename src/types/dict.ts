@@ -1,4 +1,4 @@
-﻿export interface LookupResult {
+export interface LookupResult {
   word: string
   phonetic: string
   translation: string
