@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, reactive, ref } from 'vue'
+import { nextTick, onMounted, reactive, ref } from 'vue'
 import type { Word } from '../types/word'
 
 const props = defineProps<{ word: Word }>()
@@ -10,9 +10,16 @@ interface ChatMsg {
   content: string
 }
 
+interface HistoryRow {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+}
+
 const input = ref('')
 const messages = ref<ChatMsg[]>([])
 const streaming = ref(false)
+const historyLoading = ref(true)
 const error = ref('')
 const listRef = ref<HTMLElement | null>(null)
 
@@ -28,9 +35,27 @@ async function scrollToBottom() {
   listRef.value?.scrollTo({ top: listRef.value.scrollHeight })
 }
 
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    const res = await fetch(`/api/words/${props.word.id}/chat`)
+    if (res.ok) {
+      const rows = (await res.json()) as HistoryRow[]
+      messages.value = rows
+        .filter((r) => r.content && r.content.trim().length > 0)
+        .map((r) => ({ role: r.role, content: r.content }))
+    }
+  } catch {
+    // 历史加载失败不阻塞新对话
+  } finally {
+    historyLoading.value = false
+    await scrollToBottom()
+  }
+}
+
 async function ask(question: string) {
   const text = question.trim()
-  if (!text || streaming.value) return
+  if (!text || streaming.value || historyLoading.value) return
 
   input.value = ''
   error.value = ''
@@ -106,6 +131,8 @@ function onEnter(e: KeyboardEvent) {
     ask(input.value)
   }
 }
+
+onMounted(loadHistory)
 </script>
 
 <template>
@@ -117,7 +144,8 @@ function onEnter(e: KeyboardEvent) {
       </header>
 
       <div ref="listRef" class="list">
-        <p v-if="messages.length === 0" class="empty">
+        <p v-if="historyLoading" class="empty">正在加载历史…</p>
+        <p v-else-if="messages.length === 0" class="empty">
           点下面的问题直接问，也可以自己输入。
         </p>
 
@@ -128,7 +156,7 @@ function onEnter(e: KeyboardEvent) {
         <p v-if="error" class="error">{{ error }}</p>
       </div>
 
-      <div v-if="messages.length === 0" class="quick">
+      <div v-if="!historyLoading && messages.length === 0" class="quick">
         <button
           v-for="q in QUICK_QUESTIONS"
           :key="q"
@@ -146,7 +174,10 @@ function onEnter(e: KeyboardEvent) {
           placeholder="输入问题，Enter 发送"
           @keydown.enter="onEnter"
         />
-        <button :disabled="streaming || !input.trim()" @click="ask(input)">
+        <button
+          :disabled="streaming || historyLoading || !input.trim()"
+          @click="ask(input)"
+        >
           {{ streaming ? '回答中…' : '发送' }}
         </button>
       </div>
@@ -298,7 +329,6 @@ function onEnter(e: KeyboardEvent) {
   cursor: not-allowed;
 }
 
-/* ---------- 手机适配 ---------- */
 @media (max-width: 480px) {
   .panel {
     height: 88dvh;
