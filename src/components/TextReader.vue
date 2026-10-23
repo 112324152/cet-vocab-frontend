@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { LookupResult } from '../types/dict'
 
 const emit = defineEmits<{ close: [] }>()
@@ -14,23 +14,55 @@ interface Token {
   status: WordStatus
 }
 
+interface ParaBlock {
+  tokens: Token[]
+  translation: string
+  translating: boolean
+  error: string
+}
+
 const WORD_PATTERN = /[a-zA-Z]+(?:'[a-zA-Z]+)?/g
+const MAX_TRANSLATE_LEN = 1800
 
 const mode = ref<Mode>('edit')
 const rawText = ref('')
-const tokens = ref<Token[]>([])
+const paragraphs = ref<ParaBlock[]>([])
 const dictMap = ref<Map<string, LookupResult>>(new Map())
 const collectedSet = ref<Set<string>>(new Set())
 const loading = ref(false)
 const errorMsg = ref('')
+
+const translatingAll = ref(false)
+const translateDone = ref(0)
+const translateTotal = ref(0)
 
 const selected = ref<{
   word: string
   phonetic: string
   translation: string
   inDict: boolean
-  collected: boolean
 } | null>(null)
+
+const collecting = ref(false)
+const collectMessage = ref('')
+
+const alreadyCollected = computed(() => {
+  if (!selected.value) return false
+  return collectedSet.value.has(selected.value.word)
+})
+
+const allTranslated = computed(() => {
+  if (paragraphs.value.length === 0) return false
+  return paragraphs.value.every((p) => p.translation || p.error)
+})
+
+const translateLabel = computed(() => {
+  if (translatingAll.value) {
+    return `翻译中 ${translateDone.value}/${translateTotal.value}…`
+  }
+  if (allTranslated.value) return '重新翻译'
+  return '翻译全文'
+})
 
 function tokenize(text: string): Token[] {
   const result: Token[] = []
@@ -65,6 +97,13 @@ function tokenize(text: string): Token[] {
   return result
 }
 
+function splitParagraphs(text: string): string[] {
+  return text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+}
+
 async function analyze() {
   const text = rawText.value.trim()
   if (!text) return
@@ -73,10 +112,19 @@ async function analyze() {
   selected.value = null
 
   try {
-    const baseTokens = tokenize(text)
+    const rawParas = splitParagraphs(text)
+    const blocks: ParaBlock[] = rawParas.map((p) => ({
+      tokens: tokenize(p),
+      translation: '',
+      translating: false,
+      error: '',
+    }))
+
     const uniqueWords = new Set<string>()
-    for (const t of baseTokens) {
-      if (t.isWord) uniqueWords.add(t.lower)
+    for (const para of blocks) {
+      for (const t of para.tokens) {
+        if (t.isWord) uniqueWords.add(t.lower)
+      }
     }
 
     const wordList = Array.from(uniqueWords).slice(0, 500)
@@ -101,17 +149,22 @@ async function analyze() {
         collectedSet.value = new Set(list.map((x) => x.word))
       }
     } catch {
-      // 收藏列表加载失败不影响分析
+      // 静默
     }
 
-    for (const t of baseTokens) {
-      if (!t.isWord) continue
-      if (collectedSet.value.has(t.lower)) t.status = 'collected'
-      else if (map.has(t.lower)) t.status = 'known'
-      else t.status = 'unknown'
+    for (const para of blocks) {
+      for (const t of para.tokens) {
+        if (!t.isWord) continue
+        if (collectedSet.value.has(t.lower)) t.status = 'collected'
+        else if (map.has(t.lower)) t.status = 'known'
+        else t.status = 'unknown'
+      }
     }
 
-    tokens.value = baseTokens
+    paragraphs.value = blocks
+    translatingAll.value = false
+    translateDone.value = 0
+    translateTotal.value = 0
     mode.value = 'reading'
   } catch (e) {
     errorMsg.value = `分析失败：${(e as Error).message}`
@@ -126,40 +179,157 @@ function openWord(t: Token) {
   selected.value = {
     word: t.lower,
     phonetic: info?.phonetic || '',
-    translation: info?.translation || '词典中未收录',
+    translation: info?.translation || '词典中未收录，可加入收集本',
     inDict: !!info,
-    collected: collectedSet.value.has(t.lower),
   }
+  collecting.value = false
+  collectMessage.value = ''
 }
 
 async function collect() {
   const w = selected.value
-  if (!w || w.collected) return
+  if (!w || collecting.value) return
+  collecting.value = true
+  collectMessage.value = ''
   try {
     const res = await fetch('/api/collect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ word: w.word, context: '' }),
     })
-    if (res.ok) {
-      collectedSet.value.add(w.word)
-      for (const t of tokens.value) {
+    if (!res.ok) {
+      collectMessage.value = `收藏失败 (HTTP ${res.status})`
+      return
+    }
+    collectedSet.value = new Set([...collectedSet.value, w.word])
+    for (const para of paragraphs.value) {
+      for (const t of para.tokens) {
         if (t.isWord && t.lower === w.word) t.status = 'collected'
       }
-      selected.value = { ...w, collected: true }
     }
-  } catch {
-    // 收藏失败静默
+    collectMessage.value = '已收藏'
+  } catch (e) {
+    collectMessage.value = `网络错误：${(e as Error).message}`
+  } finally {
+    collecting.value = false
+  }
+}
+
+function splitLongText(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text]
+  const sentences = text.split(/(?<=[.!?])\s+/)
+  const chunks: string[] = []
+  let current = ''
+  for (const s of sentences) {
+    if (current.length + s.length + 1 > maxLen && current.length > 0) {
+      chunks.push(current)
+      current = s
+    } else {
+      current = current ? `${current} ${s}` : s
+    }
+  }
+  if (current) chunks.push(current)
+  return chunks.length > 0 ? chunks : [text.slice(0, maxLen)]
+}
+
+async function streamTranslate(text: string, onDelta: (d: string) => void) {
+  const res = await fetch('/api/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!res.ok || !res.body) {
+    throw new Error(`HTTP ${res.status}`)
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finished = false
+
+  while (!finished) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const blocks = buffer.split('\n\n')
+    buffer = blocks.pop() ?? ''
+
+    for (const block of blocks) {
+      const line = block.trim()
+      if (!line.startsWith('data:')) continue
+      const jsonText = line.slice(5).trim()
+      if (!jsonText) continue
+      const payload = JSON.parse(jsonText) as {
+        delta?: string
+        done?: boolean
+        error?: string
+      }
+      if (payload.error) throw new Error(payload.error)
+      if (payload.delta) onDelta(payload.delta)
+      if (payload.done) {
+        finished = true
+        break
+      }
+    }
+  }
+}
+
+async function translateOne(para: ParaBlock) {
+  para.translating = true
+  para.error = ''
+  const original = para.tokens.map((t) => t.text).join('')
+  const chunks = splitLongText(original, MAX_TRANSLATE_LEN)
+  try {
+    for (const chunk of chunks) {
+      await streamTranslate(chunk, (delta) => {
+        para.translation += delta
+      })
+    }
+  } catch (e) {
+    para.error = (e as Error).message
+  } finally {
+    para.translating = false
+  }
+}
+
+async function translateAll() {
+  if (translatingAll.value) return
+
+  if (allTranslated.value) {
+    for (const p of paragraphs.value) {
+      p.translation = ''
+      p.error = ''
+    }
+  }
+
+  const pending = paragraphs.value.filter((p) => !p.translation && !p.error)
+  if (pending.length === 0) return
+
+  translatingAll.value = true
+  translateDone.value = 0
+  translateTotal.value = pending.length
+  try {
+    for (const para of paragraphs.value) {
+      if (para.translation || para.error) continue
+      await translateOne(para)
+      translateDone.value += 1
+    }
+  } finally {
+    translatingAll.value = false
   }
 }
 
 function closePopup() {
   selected.value = null
+  collectMessage.value = ''
 }
 
 function backToEdit() {
   mode.value = 'edit'
   selected.value = null
+  collectMessage.value = ''
+  paragraphs.value = []
+  translatingAll.value = false
 }
 </script>
 
@@ -167,13 +337,13 @@ function backToEdit() {
   <div class="overlay" @click.self="emit('close')">
     <div class="panel">
       <header class="panel-header">
-        <div class="title">阅读收集 v2</div>
+        <div class="title">阅读收集</div>
         <button class="close" @click="emit('close')">×</button>
       </header>
 
       <div class="body">
         <template v-if="mode === 'edit'">
-          <p class="hint">把一段英文粘贴进来，自动标出你还没掌握的单词。</p>
+          <p class="hint">把一段英文粘贴进来，自动标出你还没掌握的单词，也可以一键翻译全文。</p>
           <textarea
             v-model="rawText"
             class="input"
@@ -193,6 +363,13 @@ function backToEdit() {
         <template v-else>
           <div class="toolbar">
             <button class="back" @click="backToEdit">← 重新粘贴</button>
+            <button
+              class="translate"
+              :disabled="translatingAll"
+              @click="translateAll"
+            >
+              {{ translateLabel }}
+            </button>
             <div class="legend">
               <span class="dot known"></span>词库
               <span class="dot unknown"></span>生词
@@ -201,15 +378,28 @@ function backToEdit() {
           </div>
 
           <div class="reading">
-            <template v-for="(t, i) in tokens" :key="i">
-              <span
-                v-if="t.isWord"
-                class="token"
-                :class="'st-' + t.status"
-                @click="openWord(t)"
-              >{{ t.text }}</span>
-              <span v-else>{{ t.text }}</span>
-            </template>
+            <div v-for="(para, pi) in paragraphs" :key="pi" class="para-block">
+              <div class="para-original">
+                <template v-for="(t, i) in para.tokens" :key="i">
+                  <span
+                    v-if="t.isWord"
+                    class="token"
+                    :class="'st-' + t.status"
+                    @click="openWord(t)"
+                  >{{ t.text }}</span>
+                  <span v-else>{{ t.text }}</span>
+                </template>
+              </div>
+              <div v-if="para.translation" class="para-translation">
+                {{ para.translation }}
+              </div>
+              <div v-else-if="para.translating" class="para-translating">
+                翻译中…
+              </div>
+              <div v-if="para.error" class="para-error">
+                翻译失败：{{ para.error }}
+              </div>
+            </div>
           </div>
         </template>
       </div>
@@ -222,17 +412,19 @@ function backToEdit() {
               <span v-if="selected.phonetic" class="popup-phonetic">
                 /{{ selected.phonetic }}/
               </span>
+              <span v-if="alreadyCollected" class="collected-badge">已收藏</span>
             </div>
             <button class="popup-close" @click="closePopup">×</button>
           </div>
           <p class="popup-translation">{{ selected.translation }}</p>
+          <p v-if="collectMessage" class="popup-msg">{{ collectMessage }}</p>
           <div class="popup-actions">
             <button
               class="primary small"
-              :disabled="false"
+              :disabled="collecting"
               @click="collect"
             >
-              {{ selected.collected ? '已收藏' : '收藏' }}
+              {{ collecting ? '收藏中…' : alreadyCollected ? '再收藏一次' : '收藏' }}
             </button>
           </div>
         </div>
@@ -344,7 +536,6 @@ function backToEdit() {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   margin-bottom: 14px;
   flex-wrap: wrap;
@@ -360,12 +551,32 @@ function backToEdit() {
   min-height: 36px;
 }
 
+.translate {
+  border: 0;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  min-height: 36px;
+}
+
+.translate:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.translate:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .legend {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
   color: #6b7280;
+  margin-left: auto;
 }
 
 .dot {
@@ -382,11 +593,48 @@ function backToEdit() {
 .dot.collected { background: #86efac; }
 
 .reading {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.para-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.para-original {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.9;
   font-size: 16px;
   color: #111827;
+}
+
+.para-translation {
+  padding-left: 10px;
+  border-left: 3px solid #bfdbfe;
+  color: #374151;
+  font-size: 15px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.para-translating {
+  padding-left: 10px;
+  border-left: 3px solid #e5e7eb;
+  color: #9ca3af;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.para-error {
+  padding-left: 10px;
+  border-left: 3px solid #fecaca;
+  color: #991b1b;
+  font-size: 13px;
 }
 
 .token {
@@ -457,6 +705,14 @@ function backToEdit() {
   color: #9ca3af;
 }
 
+.collected-badge {
+  font-size: 11px;
+  color: #166534;
+  background: #dcfce7;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
 .popup-close {
   border: 0;
   background: transparent;
@@ -476,6 +732,12 @@ function backToEdit() {
   line-height: 1.6;
 }
 
+.popup-msg {
+  margin: -6px 0 10px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
 .popup-actions {
   display: flex;
   justify-content: flex-end;
@@ -490,9 +752,19 @@ function backToEdit() {
     padding: 12px;
   }
 
-  .reading {
+  .para-original {
     font-size: 15px;
     line-height: 1.8;
+  }
+
+  .para-translation {
+    font-size: 14px;
+  }
+
+  .legend {
+    width: 100%;
+    margin-left: 0;
+    order: 3;
   }
 }
 </style>
