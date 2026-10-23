@@ -1,18 +1,55 @@
 <script setup lang="ts">
 import AnalyticsPanel from '../components/AnalyticsPanel.vue'
+import MonthCalendar from '../components/MonthCalendar.vue'
 </script>
 
 <template>
-  <div class="embed">
-    <AnalyticsPanel />
+  <div class="records">
+    <section class="block">
+      <div class="block-head">
+        <h2>学习日历</h2>
+      </div>
+      <MonthCalendar />
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2>数据统计</h2>
+      </div>
+      <div class="embed">
+        <AnalyticsPanel />
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.embed {
+.records {
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
 }
 
 .embed :deep(.overlay) {

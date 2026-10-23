@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { inject, ref } from 'vue'
+import { inject, onMounted, ref } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import ActionBar from '../components/ActionBar.vue'
 import ChatPanel from '../components/ChatPanel.vue'
+import ProgressRing from '../components/ProgressRing.vue'
 import WordCard from '../components/WordCard.vue'
 import { useWordSession } from '../composables/useWordSession'
 import type { Word } from '../types/word'
@@ -23,12 +24,34 @@ const { backendOk, backendText, loadError } = appStatus
 
 const chatOpen = ref(false)
 const chatWord = ref<Word | null>(null)
+const todayCount = ref(0)
+const todayGoal = ref(50)
+
+async function loadToday() {
+  try {
+    const res = await fetch('/api/progress/today')
+    if (res.ok) {
+      const data = (await res.json()) as { count: number; goal: number }
+      todayCount.value = data.count
+      todayGoal.value = data.goal
+    }
+  } catch {
+    // 静默
+  }
+}
+
+async function onMark(state: 'known' | 'unknown') {
+  await mark(state)
+  todayCount.value += 1
+}
 
 function openChat() {
   if (!currentWord.value) return
   chatWord.value = currentWord.value
   chatOpen.value = true
 }
+
+onMounted(loadToday)
 </script>
 
 <template>
@@ -40,18 +63,21 @@ function openChat() {
       {{ backendText }}
     </p>
 
-    <div class="stats">
-      <span class="due">待复习 {{ stats.dueNow }}</span>
-      <span>未学 {{ stats.newCount }}</span>
-      <span class="known">熟词 {{ stats.known }}</span>
-      <span class="unknown">生词 {{ stats.unknown }}</span>
+    <div class="progress-row">
+      <ProgressRing :current="todayCount" :goal="todayGoal" :size="90" />
+      <div class="stats">
+        <span class="due">待复习 {{ stats.dueNow }}</span>
+        <span>未学 {{ stats.newCount }}</span>
+        <span class="known">熟词 {{ stats.known }}</span>
+        <span class="unknown">生词 {{ stats.unknown }}</span>
+      </div>
     </div>
 
     <p v-if="loadError" class="load-error">{{ loadError }}</p>
     <template v-else>
       <WordCard v-if="currentWord" :word="currentWord" @ask="openChat" />
       <p v-else class="loading">正在加载…</p>
-      <ActionBar :disabled="busy" @mark="mark" />
+      <ActionBar :disabled="busy" @mark="onMark" />
     </template>
 
     <ChatPanel
@@ -70,7 +96,7 @@ function openChat() {
   padding: 20px 16px 32px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .backend {
@@ -81,6 +107,12 @@ function openChat() {
 
 .backend.ok { color: #166534; }
 .backend.fail { color: #991b1b; }
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
 
 .stats {
   display: flex;
